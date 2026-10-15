@@ -1,4 +1,4 @@
-# SSMU-Data-Challenge-I
+675940# SSMU-Data-Challenge-I
 
 Welcome to Data Challenge I! You and your teammates will have from 11 am to 5:30 pm on Saturday, October 17th, to explore the data and submit a presentation on your analysis.
 
@@ -30,35 +30,35 @@ We provided a zip file with the CSV for your team's convenience, but you can als
 
 | Column | Data type | Description |
 | --- | --- | --- |
-| CRASH DATE | Date/time | Date the crash occurred. |
-| CRASH TIME | Text | Time the crash occurred. |
-| BOROUGH | Text | NYC borough where the crash occurred. |
-| ZIP CODE | Text | ZIP code where the crash occurred. |
-| LATITUDE | Number | Latitude in decimal degrees, using WGS 1984 (EPSG:4326). |
-| LONGITUDE | Number | Longitude in decimal degrees, using WGS 1984 (EPSG:4326). |
-| LOCATION | Point | Combined latitude and longitude. |
-| ON STREET NAME | Text | Street where the crash occurred. |
-| CROSS STREET NAME | Text | Nearest cross street to the crash. |
-| OFF STREET NAME | Text | Street address, if known. |
-| NUMBER OF PERSONS INJURED | Number | Total number of people injured. |
-| NUMBER OF PERSONS KILLED | Number | Total number of people killed. |
-| NUMBER OF PEDESTRIANS INJURED | Number | Number of pedestrians injured. |
-| NUMBER OF PEDESTRIANS KILLED | Number | Number of pedestrians killed. |
-| NUMBER OF CYCLIST INJURED | Number | Number of cyclists injured. |
-| NUMBER OF CYCLIST KILLED | Number | Number of cyclists killed. |
-| NUMBER OF MOTORIST INJURED | Number | Number of vehicle occupants injured. |
-| NUMBER OF MOTORIST KILLED | Number | Number of vehicle occupants killed. |
-| CONTRIBUTING FACTOR VEHICLE 1 | Text | Reported contributing factor for vehicle 1. |
-| CONTRIBUTING FACTOR VEHICLE 2 | Text | Reported contributing factor for vehicle 2. |
-| CONTRIBUTING FACTOR VEHICLE 3 | Text | Reported contributing factor for vehicle 3. |
-| CONTRIBUTING FACTOR VEHICLE 4 | Text | Reported contributing factor for vehicle 4. |
-| CONTRIBUTING FACTOR VEHICLE 5 | Text | Reported contributing factor for vehicle 5. |
-| COLLISION_ID | Number | Unique crash identifier; primary key of the crash table. |
-| VEHICLE TYPE CODE 1 | Text | Type of vehicle 1. |
-| VEHICLE TYPE CODE 2 | Text | Type of vehicle 2. |
-| VEHICLE TYPE CODE 3 | Text | Type of vehicle 3. |
-| VEHICLE TYPE CODE 4 | Text | Type of vehicle 4. |
-| VEHICLE TYPE CODE 5 | Text | Type of vehicle 5. |
+| CRASH DATE | character | Date the crash occurred. |
+| CRASH TIME | double | Time the crash occurred. |
+| BOROUGH | character | NYC borough where the crash occurred. |
+| ZIP CODE | double | ZIP code where the crash occurred. |
+| LATITUDE | double | Latitude in decimal degrees, using WGS 1984 (EPSG:4326). |
+| LONGITUDE | double | Longitude in decimal degrees, using WGS 1984 (EPSG:4326). |
+| LOCATION | character | Combined latitude and longitude. |
+| ON STREET NAME | character | Street where the crash occurred. |
+| CROSS STREET NAME | character | Nearest cross street to the crash. |
+| OFF STREET NAME | character | Street address, if known. |
+| NUMBER OF PERSONS INJURED | double | Total number of people injured. |
+| NUMBER OF PERSONS KILLED | double | Total number of people killed. |
+| NUMBER OF PEDESTRIANS INJURED | double | Number of pedestrians injured. |
+| NUMBER OF PEDESTRIANS KILLED | double | Number of pedestrians killed. |
+| NUMBER OF CYCLIST INJURED | double | Number of cyclists injured. |
+| NUMBER OF CYCLIST KILLED | double | Number of cyclists killed. |
+| NUMBER OF MOTORIST INJURED | double | Number of vehicle occupants injured. |
+| NUMBER OF MOTORIST KILLED | double | Number of vehicle occupants killed. |
+| CONTRIBUTING FACTOR VEHICLE 1 | character | Reported contributing factor for vehicle 1. |
+| CONTRIBUTING FACTOR VEHICLE 2 | character | Reported contributing factor for vehicle 2. |
+| CONTRIBUTING FACTOR VEHICLE 3 | character | Reported contributing factor for vehicle 3. |
+| CONTRIBUTING FACTOR VEHICLE 4 | character | Reported contributing factor for vehicle 4. |
+| CONTRIBUTING FACTOR VEHICLE 5 | logical | Reported contributing factor for vehicle 5. |
+| COLLISION_ID | double | Unique crash identifier; primary key of the crash table. |
+| VEHICLE TYPE CODE 1 | character | Type of vehicle 1. |
+| VEHICLE TYPE CODE 2 | character | Type of vehicle 2. |
+| VEHICLE TYPE CODE 3 | character | Type of vehicle 3. |
+| VEHICLE TYPE CODE 4 | character | Type of vehicle 4. |
+| VEHICLE TYPE CODE 5 | logical | Type of vehicle 5. |
 
 
 # Competition Policies

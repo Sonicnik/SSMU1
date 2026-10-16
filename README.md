@@ -1,4 +1,4 @@
-675940# SSMU-Data-Challenge-I
+# SSMU-Data-Challenge-I
 
 Welcome to Data Challenge I! You and your teammates will have from 11 am to 5:30 pm on Saturday, October 17th, to explore the data and submit a presentation on your analysis.
 

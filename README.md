@@ -92,7 +92,7 @@ You and your team should submit the following to your Google Drive folder:
 * A fair evaluation will be conducted by the Statistical Science Majors Union's Competitions and Opportunities Committee.
 * The judging criteria are as follows:
 1) Communication: Clarity of presentation, logical structure, and ability to explain findings to a broad audience. - 20%
-2) Creativity & Insight: Depth of analysis, creativity in approach, and ability to identify meaningful patterns. - 40%
+2) Creativity & Insight: Depth of analysis, creativity in approach, ability to identify meaningful patterns, and quality of insights and recommendations. - 40%
 3) Reproducibility: Well-organized code, clear documentation, and transparent workflows. - 5%
 4) Visualization & Design: Effective use of charts and visuals to support your conclusions. - 25%
 5) Technical Soundness: Appropriate use of statistical methods, reasonable assumptions, and valid interpretations. - 10%

@@ -1,0 +1,6 @@
+time_period,clock_window,period_hours
+Night,00:00-05:59,6
+Morning rush,06:00-09:59,4
+Midday,10:00-15:59,6
+Evening rush,16:00-19:59,4
+Evening,20:00-23:59,4

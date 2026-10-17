@@ -1,0 +1,15 @@
+metric,value
+input_records,2269187
+duplicate_records_removed,0
+unparseable_dates,0
+records_in_window,487914
+missing_or_unrecognized_borough,147427
+missing_or_unusable_name,137085
+usable_records_in_window,208445
+eligible_streets,5220
+eligible_streets_with_zero_later_crashes,1143
+baseline_crashes_on_eligible_streets,124969
+later_crashes_on_eligible_streets,72964
+patterns_tested,179
+successful_models,179
+higher_count_associations,9

@@ -1,0 +1,11 @@
+metric,value
+input_records,2269187
+selected_records,2269187
+duplicates_removed,0
+invalid_dates,0
+invalid_times,0
+missing_road_user_outcomes,0
+annual_groups,1740
+pooled_groups,120
+calendar_days_in_snapshot,5094
+complete_calendar_years,13

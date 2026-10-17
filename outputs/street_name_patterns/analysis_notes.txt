@@ -1,0 +1,27 @@
+STREET-NAME PATTERNS: EXPLORATORY RESULTS
+Input: C:/Users/17534/OneDrive/Desktop/SSMU1/data/motor_vehicle_collisions.csv
+Baseline: 2021-01-01 through 2023-12-31; outcome: 2024-01-01 through 2025-12-31
+Model: later_crashes ~ has_pattern + borough + road_type + log1p(name_length) +      numbered
+Eligible streets: 5220 | tested patterns: 179
+Successful models: 179 | higher-count associations: 9
+
+Files: street_counts.csv (one borough/name unit per row); pattern_results.csv
+(all eligible patterns, including failed fits); higher_count_patterns.csv
+(successful positive associations with Holm-adjusted p < 0.05); data_audit.csv;
+pattern_associations.png (up to 15 patterns ranked by adjusted p, then effect).
+
+count_ratio is an adjusted count ratio, not a per-trip or per-mile risk ratio.
+Confidence intervals are nominal 95%, not multiplicity-adjusted intervals.
+The character scan excludes generic road-type endings and normalizes ordinals.
+Patterns are adjacent substrings within words; they do not cross spaces.
+Each pattern counts at most once per street; patterns overlap across streets.
+Missing/invalid borough and street names are excluded, possibly nonrandomly.
+A borough/name can combine disconnected roads; aliases may remain unmerged.
+Street length, traffic volume, spatial dependence and neighborhood confounding
+are unmeasured. These are exploratory associations, not causal findings.
+Streets absent from baseline are excluded; this is not a census of NYC roads.
+No test result should be described as proving that a character causes crashes.
+
+Source: City of New York, Motor Vehicle Collisions - Crashes.
+https://catalog.data.gov/dataset/motor-vehicle-collisions-crashes
+Include this AI conversation in citations if following the challenge rules.

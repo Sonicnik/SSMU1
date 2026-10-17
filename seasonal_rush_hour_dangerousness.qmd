@@ -1,0 +1,465 @@
+---
+title: "Season, Time of Day, and Traffic Casualties"
+subtitle: "NYC police-reported collisions | Available records from 2012-2026"
+lang: en
+format:
+  html:
+    toc: true
+    toc-title: "Contents"
+    toc-depth: 2
+    embed-resources: true
+    code-fold: true
+    code-summary: "Show R code"
+    theme: cosmo
+    fig-width: 12
+    fig-height: 5
+execute:
+  echo: true
+  warning: true
+  message: false
+editor: source
+---
+
+## Research question
+
+**How do injury and death patterns differ by season and time of day, and do pedestrians, cyclists, and motorists show the same patterns?**
+
+The analysis includes **all available records dated 2012-2026**. Each crash is labeled by time window and season, then injuries and deaths are summed separately for the three road-user groups. Injuries and deaths can occur in the same crash; they are outcomes, not mutually exclusive crash categories. All casualty figures count **people**, not injury-crash or fatal-crash events.
+
+```{r}
+#| label: setup
+if (.Platform$OS.type == "windows") {
+  invisible(Sys.setlocale("LC_CTYPE", "English_United States.utf8"))
+}
+required_packages <- c("data.table", "ggplot2", "knitr")
+missing_packages <- required_packages[!vapply(
+  required_packages, requireNamespace, logical(1), quietly = TRUE
+)]
+if (length(missing_packages)) {
+  stop("Install required R packages: ", paste(missing_packages, collapse = ", "))
+}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(ggplot2))
+setDTthreads(min(4L, getDTthreads()))
+options(scipen = 999)
+
+start_year <- 2012L
+end_year <- 2026L
+study_years <- seq.int(start_year, end_year)
+csv_path <- file.path("data", "motor_vehicle_collisions.csv")
+output_dir <- file.path("outputs", "seasonal_rush_hour")
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+time_labels <- c("Night", "Morning rush", "Midday", "Evening rush", "Evening")
+time_breaks <- c(0, 6, 10, 16, 20, 24)
+time_key <- data.table(
+  time_period = factor(time_labels, levels = time_labels),
+  clock_window = c("00:00-05:59", "06:00-09:59", "10:00-15:59", "16:00-19:59", "20:00-23:59"),
+  period_hours = diff(time_breaks)
+)
+season_labels <- c("Spring", "Summer", "Autumn", "Winter")
+season_colors <- c(Spring = "#009E73", Summer = "#E69F00", Autumn = "#D55E00", Winter = "#0072B2")
+road_user_labels <- c("Pedestrians", "Cyclists", "Motorists")
+outcome_labels <- c("Injuries", "Deaths")
+outcome_key <- data.table(
+  measure = c(
+    "NUMBER OF PEDESTRIANS INJURED", "NUMBER OF CYCLIST INJURED", "NUMBER OF MOTORIST INJURED",
+    "NUMBER OF PEDESTRIANS KILLED", "NUMBER OF CYCLIST KILLED", "NUMBER OF MOTORIST KILLED"
+  ),
+  road_user = rep(road_user_labels, 2L),
+  outcome = rep(outcome_labels, each = 3L)
+)
+season_from_month <- function(month_number) {
+  factor(fifelse(month_number %in% 3:5, "Spring",
+    fifelse(month_number %in% 6:8, "Summer",
+      fifelse(month_number %in% 9:11, "Autumn", "Winter"))),
+    levels = season_labels)
+}
+sum_observed <- function(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
+fmt <- function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
+
+theme_set(theme_minimal(base_size = 12) + theme(
+  panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+  legend.position = "bottom", legend.title = element_blank(),
+  strip.text = element_text(face = "bold"),
+  plot.title = element_text(face = "bold", size = 16),
+  plot.subtitle = element_text(color = "gray35"),
+  plot.caption = element_text(hjust = 0, color = "gray35", size = 9),
+  axis.text.x = element_text(angle = 25, hjust = 1)
+))
+```
+
+## Time windows and seasons
+
+Spring means March-May, summer June-August, autumn September-November, and winter December-February. When grouped by calendar year, winter means January, February, and December of that year; it does not identify a single continuous cross-year winter.
+
+```{r}
+#| label: time-definitions
+knitr::kable(time_key, col.names = c("Time window", "Clock range", "Hours per day"))
+```
+
+Night and Midday span six hours, while the other windows span four. The report first shows total recorded casualties and then adjusts for crash counts and the number of available calendar hours.
+
+## Actual coverage and partial years
+
+```{r}
+#| label: read-and-label
+if (!file.exists(csv_path)) stop("CSV not found; render from the project directory.")
+selected_columns <- c("COLLISION_ID", "CRASH DATE", "CRASH TIME", outcome_key$measure)
+raw <- fread(file = csv_path, select = selected_columns,
+  colClasses = list(character = c("COLLISION_ID", "CRASH DATE", "CRASH TIME")),
+  na.strings = c("", "NA"))
+input_records <- nrow(raw)
+raw[, year := suppressWarnings(as.integer(sub("^.*/", "", `CRASH DATE`)))]
+cohort <- raw[year %in% study_years]
+rm(raw)
+if (!nrow(cohort)) stop("No records in the requested years.")
+if (anyNA(cohort$COLLISION_ID)) stop("Missing collision IDs must be resolved first.")
+duplicates_removed <- sum(duplicated(cohort$COLLISION_ID))
+cohort <- unique(cohort, by = "COLLISION_ID")
+cohort[, crash_date := as.IDate(`CRASH DATE`, format = "%m/%d/%Y")]
+clock_text <- trimws(cohort$`CRASH TIME`)
+valid_clock <- !is.na(clock_text) & grepl(
+  "^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$", clock_text)
+cohort[, hour := suppressWarnings(as.integer(sub(":.*$", "", clock_text)))]
+invalid_dates <- sum(is.na(cohort$crash_date))
+invalid_times <- sum(!valid_clock)
+cohort <- cohort[!is.na(crash_date) & valid_clock]
+cohort[, `:=`(
+  season = season_from_month(as.integer(format(crash_date, "%m"))),
+  time_period = cut(hour, breaks = time_breaks, labels = time_labels,
+    right = FALSE, include.lowest = TRUE)
+)]
+if (anyNA(cohort$time_period)) stop("Some crashes have no time-window label.")
+for (column in outcome_key$measure) {
+  values <- cohort[[column]]
+  if (!is.numeric(values)) stop("Non-numeric casualty field: ", column)
+  if (any(!is.finite(values[!is.na(values)])) || any(values < 0, na.rm = TRUE)) {
+    stop("Invalid casualty counts: ", column)
+  }
+}
+first_date <- min(cohort$crash_date)
+last_date <- max(cohort$crash_date)
+coverage_label <- paste(format(first_date), "to", format(last_date))
+coverage <- cohort[, .(
+  crashes = .N, first_date = min(crash_date), last_date = max(crash_date),
+  days_with_records = uniqueN(crash_date)
+), by = year][order(year)]
+if (!setequal(coverage$year, study_years)) stop("Some requested years have no records.")
+coverage[, full_calendar_year :=
+  first_date == as.IDate(sprintf("%d-01-01", year)) &
+  last_date == as.IDate(sprintf("%d-12-31", year))]
+complete_years <- coverage[full_calendar_year == TRUE, year]
+
+# Count calendar days only inside the actual snapshot interval, not full
+# nominal years. Missing interior dates would be flagged, not silently removed.
+calendar <- data.table(date = seq.Date(as.Date(first_date), as.Date(last_date), by = "day"))
+calendar[, `:=`(year = as.integer(format(date, "%Y")),
+  season = season_from_month(as.integer(format(date, "%m"))))]
+calendar_days <- calendar[, .(calendar_days = .N), by = .(year, season)]
+coverage <- merge(coverage, calendar[, .(interval_days = .N), by = year], by = "year")
+if (any(coverage$days_with_records != coverage$interval_days)) {
+  warning("Some interior dates have no records; calendar-hour measures retain those dates.")
+}
+knitr::kable(coverage, col.names = c("Year", "Crashes", "First date", "Last date",
+  "Days with records", "Full calendar year?", "Days in snapshot interval"))
+```
+
+The analysis retains **`r fmt(nrow(cohort))` crashes** from **`r format(first_date)` to `r format(last_date)`** out of `r fmt(input_records)` source records. Duplicate IDs removed: `r fmt(duplicates_removed)`; unparseable dates: `r fmt(invalid_dates)`; invalid times: `r fmt(invalid_times)`.
+
+**2012 and 2026 are partial years.** The primary analysis retains their records, as requested. Seasons therefore have unequal calendar coverage. Calendar-hour denominators use the actual interval shown above, including only the covered portion of an endpoint season. The final date may itself be incomplete; treating it as a full calendar day is an approximation. No records are excluded because borough, coordinates, or street names are missing.
+
+Crashes near the snapshot cutoff may not yet have complete reporting or follow-up. The completeness of all actual deaths cannot be established merely because a reported road-user death field is nonmissing.
+
+## Aggregation and validation
+
+Each crash contributes to its year, time window, and season. The six road-user outcome fields are summed separately. Missing casualty values are not interpreted as confirmed zeros; the per-crash denominator uses records with a known value for the corresponding outcome. Overall person totals are not added to the road-user totals.
+
+```{r}
+#| label: aggregate
+group_columns <- c("year", "time_period", "season")
+annual_counts <- melt(
+  cohort[, lapply(.SD, sum_observed), by = group_columns, .SDcols = outcome_key$measure],
+  id.vars = group_columns, variable.name = "measure", value.name = "people",
+  variable.factor = FALSE)
+annual_missing <- melt(
+  cohort[, lapply(.SD, function(x) sum(is.na(x))), by = group_columns, .SDcols = outcome_key$measure],
+  id.vars = group_columns, variable.name = "measure", value.name = "missing_outcomes",
+  variable.factor = FALSE)
+crash_counts <- cohort[, .(reported_crashes = .N), by = group_columns]
+annual_summary <- merge(annual_counts, annual_missing, by = c(group_columns, "measure"), all = TRUE)
+annual_summary <- merge(annual_summary, crash_counts, by = group_columns, all.x = TRUE)
+annual_summary <- merge(annual_summary, outcome_key, by = "measure", all.x = TRUE)
+annual_summary <- merge(annual_summary, calendar_days, by = c("year", "season"), all.x = TRUE)
+annual_summary <- merge(annual_summary, time_key[, .(time_period, period_hours)],
+  by = "time_period", all.x = TRUE)
+annual_summary[, known_outcome_crashes := reported_crashes - missing_outcomes]
+annual_summary[, people_per_1000_crashes := fifelse(known_outcome_crashes > 0,
+  people / known_outcome_crashes * 1000, NA_real_)]
+annual_summary[, people_per_calendar_hour := people / (calendar_days * period_hours)]
+
+pool_years <- function(table) {
+  result <- table[, .(
+    people = sum_observed(people), reported_crashes = sum(reported_crashes),
+    missing_outcomes = sum(missing_outcomes),
+    known_outcome_crashes = sum(known_outcome_crashes),
+    calendar_days = sum(calendar_days), period_hours = unique(period_hours)
+  ), by = .(time_period, season, road_user, outcome)]
+  result[, `:=`(
+    people_per_1000_crashes = fifelse(known_outcome_crashes > 0,
+      people / known_outcome_crashes * 1000, NA_real_),
+    people_per_calendar_hour = people / (calendar_days * period_hours)
+  )]
+  result
+}
+pooled_summary <- pool_years(annual_summary)
+complete_summary <- pool_years(annual_summary[year %in% complete_years])
+for (table in list(annual_summary, pooled_summary, complete_summary)) {
+  table[, `:=`(
+    time_period = factor(time_period, levels = time_labels),
+    season = factor(season, levels = season_labels),
+    road_user = factor(road_user, levels = road_user_labels),
+    outcome = factor(outcome, levels = outcome_labels)
+  )]
+}
+setorder(annual_summary, year, time_period, season, road_user, outcome)
+setorder(pooled_summary, time_period, season, road_user, outcome)
+setorder(complete_summary, time_period, season, road_user, outcome)
+stopifnot(nrow(pooled_summary) == 5L * 4L * 3L * 2L)
+stopifnot(nrow(annual_summary) == nrow(calendar_days) * 5L * 3L * 2L)
+stopifnot(all(annual_summary$calendar_days > 0), all(annual_summary$known_outcome_crashes >= 0))
+for (i in seq_len(nrow(outcome_key))) {
+  original_total <- sum_observed(cohort[[outcome_key$measure[i]]])
+  aggregated_total <- sum_observed(pooled_summary[
+    road_user == outcome_key$road_user[i] & outcome == outcome_key$outcome[i], people])
+  stopifnot(isTRUE(all.equal(original_total, aggregated_total)))
+}
+missing_summary <- pooled_summary[, .(missing_outcomes = sum(missing_outcomes)), by = .(road_user, outcome)]
+if (sum(missing_summary$missing_outcomes) > 0L) {
+  warning("Casualty values are missing; sums use recorded values and rates use known-outcome denominators.")
+}
+fwrite(annual_summary, file.path(output_dir, "annual_summary.csv"))
+fwrite(pooled_summary, file.path(output_dir, "season_time_summary.csv"))
+fwrite(complete_summary, file.path(output_dir, "complete_years_summary.csv"))
+fwrite(coverage, file.path(output_dir, "year_coverage.csv"))
+fwrite(calendar_days, file.path(output_dir, "calendar_days_by_year_season.csv"))
+fwrite(missing_summary, file.path(output_dir, "missing_outcomes.csv"))
+fwrite(time_key, file.path(output_dir, "time_period_definitions.csv"))
+```
+
+There are **`r nrow(pooled_summary)` pooled combinations** and **`r nrow(annual_summary)` annual combinations**. Seasons outside the snapshot interval are absent, rather than incorrectly represented as observed zero-casualty seasons. The six road-user outcome fields contain **`r fmt(sum(missing_summary$missing_outcomes))` missing values** in the retained records.
+
+## 1. Total injuries by season and time window
+
+Compare seasons within the same time window, or follow one season across time windows. Each road-user panel has an **independent y-axis scale** so within-group differences remain visible; compare axis values, not bar heights, across panels.
+
+```{r}
+#| label: fig-injury-totals
+#| fig-cap: "All available 2012-2026 records. Raw totals include unequal seasonal coverage and unequal time-window durations."
+injury_plot <- ggplot(pooled_summary[outcome == "Injuries"],
+  aes(x = time_period, y = people, fill = season)) +
+  geom_col(position = position_dodge(width = 0.82), width = 0.75) +
+  facet_wrap(~road_user, nrow = 1, scales = "free_y") +
+  scale_fill_manual(values = season_colors, drop = FALSE) +
+  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE),
+    expand = expansion(mult = c(0, 0.08))) +
+  labs(title = "Injuries by time of day and season",
+    subtitle = paste(coverage_label, "| Independent y scales by road user"),
+    x = NULL, y = "People injured",
+    caption = "Recorded totals: endpoint years are partial and time-window lengths differ.")
+injury_plot
+```
+
+## 2. Total deaths by season and time window
+
+Deaths are plotted separately from injuries. These are recorded death counts, not estimates of the chance of death. Small differences in cyclist deaths require particular caution, even after pooling the available years. No significance test is performed.
+
+```{r}
+#| label: fig-death-totals
+#| fig-cap: "All available 2012-2026 records. Small counts are uncertain; zero recorded deaths do not establish safety."
+death_plot <- ggplot(pooled_summary[outcome == "Deaths"],
+  aes(x = time_period, y = people, fill = season)) +
+  geom_col(position = position_dodge(width = 0.82), width = 0.75) +
+  facet_wrap(~road_user, nrow = 1, scales = "free_y") +
+  scale_fill_manual(values = season_colors, drop = FALSE) +
+  scale_y_continuous(breaks = function(limits) unique(round(pretty(limits, n = 5))),
+    expand = expansion(mult = c(0, 0.08))) +
+  labs(title = "Deaths by time of day and season",
+    subtitle = paste(coverage_label, "| Independent y scales by road user"),
+    x = NULL, y = "People killed",
+    caption = "Recorded deaths; raw totals are not adjusted for duration or traffic exposure.")
+death_plot
+```
+
+## 3. Casualties per 1,000 reported crashes
+
+**Recorded people injured or killed / all crashes with a known value for that outcome in the same time-season group x 1,000.** The denominator is not restricted to crashes involving that road-user group. This is neither a road-user case-fatality rate nor risk per trip.
+
+The pooled per-crash figures also combine different reporting regimes. NYPD expanded its property-damage-only collision policy citywide on **April 6, 2020**; changes in which crashes enter the denominator limit comparisons over time. These figures describe this snapshot, rather than a uniform underlying crash-reporting process.
+
+```{r}
+#| label: fig-per-crash
+#| fig-height: 7
+#| fig-cap: "Casualties per recorded crash; injuries and deaths have different y-axis scales. Reporting practices changed during the study period."
+per_crash_plot <- ggplot(pooled_summary,
+  aes(x = time_period, y = people_per_1000_crashes, color = season, group = season)) +
+  geom_line(linewidth = 0.85) + geom_point(size = 2.1) +
+  facet_grid(outcome ~ road_user, scales = "free_y") +
+  scale_color_manual(values = season_colors, drop = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.03, 0.1))) +
+  labs(title = "Casualties per 1,000 reported crashes",
+    subtitle = "All available records | Denominator includes all known-outcome crashes in each group",
+    x = NULL, y = "People per 1,000 reported crashes",
+    caption = "Reporting changed over time. This is not risk per trip or per road-user involvement.")
+per_crash_plot
+```
+
+## 4. Casualties per available calendar hour
+
+**Recorded casualties / (covered calendar days in the season x hours per day in the time window).** This corrects for unequal durations and the missing portions of 2012 and 2026. It does not adjust for traffic volume, trips, weather, secular trends, reporting changes, or an incompletely reported final date.
+
+```{r}
+#| label: fig-per-calendar-hour
+#| fig-height: 7
+#| fig-cap: "Calendar-hour burden uses actual snapshot dates, including partial endpoint seasons. Traffic exposure remains unmeasured."
+per_hour_plot <- ggplot(pooled_summary,
+  aes(x = time_period, y = people_per_calendar_hour, color = season, group = season)) +
+  geom_line(linewidth = 0.85) + geom_point(size = 2.1) +
+  facet_grid(outcome ~ road_user, scales = "free_y") +
+  scale_color_manual(values = season_colors, drop = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.03, 0.1))) +
+  labs(title = "Casualties per available calendar hour",
+    subtitle = "Actual snapshot coverage and time-window duration are included in the denominator",
+    x = NULL, y = "People per calendar hour",
+    caption = "Adjusted for calendar duration, not traffic volume, trips, or changes across years.")
+per_hour_plot
+```
+
+## 5. Sensitivity check: complete calendar years only
+
+The main analysis above retains every available 2012-2026 record. As a separate check, the figure below uses **`r min(complete_years)`-`r max(complete_years)`**, the complete calendar years in this snapshot. It asks whether the broad pattern survives removing the partial endpoints; it does not remove reporting changes, temporal confounding, or incomplete death follow-up.
+
+```{r}
+#| label: fig-complete-years
+#| fig-height: 7
+#| fig-cap: "Sensitivity check using complete calendar years only; the primary analysis still includes 2012 and 2026."
+complete_years_plot <- ggplot(complete_summary,
+  aes(x = time_period, y = people_per_calendar_hour, color = season, group = season)) +
+  geom_line(linewidth = 0.85) + geom_point(size = 2.1) +
+  facet_grid(outcome ~ road_user, scales = "free_y") +
+  scale_color_manual(values = season_colors, drop = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.03, 0.1))) +
+  labs(title = "Complete-year check: casualties per calendar hour",
+    subtitle = paste0(min(complete_years), "-", max(complete_years), " only | Compare with the full-period figure above"),
+    x = NULL, y = "People per calendar hour",
+    caption = "A descriptive sensitivity check, not a statistical test of equivalence or causation.")
+complete_years_plot
+```
+
+## Summary tables and annual checks
+
+Road-user totals may not reconcile with the dataset's separate overall-person totals. This report uses the six road-user fields consistently and does not overwrite them with an overall total or infer missing categories.
+
+```{r}
+#| label: total-check
+total_table <- dcast(pooled_summary[, .(people = sum_observed(people)),
+  by = .(road_user, outcome)], road_user ~ outcome, value.var = "people")
+knitr::kable(total_table, col.names = c("Road user", "People injured", "People killed"),
+  format.args = list(big.mark = ","))
+annual_totals <- dcast(annual_summary[, .(people = sum_observed(people)),
+  by = .(year, road_user, outcome)], year + road_user ~ outcome, value.var = "people")
+knitr::kable(annual_totals, col.names = c("Year", "Road user", "People injured", "People killed"),
+  format.args = list(big.mark = ","))
+```
+
+## Findings and interpretation
+
+```{r}
+#| label: findings-calculations
+#| include: false
+# Aggregate across seasons without counting their calendar days more than once.
+timing_summary <- pooled_summary[, .(
+  people = sum_observed(people), known_outcome_crashes = sum(known_outcome_crashes),
+  calendar_days = sum(calendar_days), period_hours = unique(period_hours)
+), by = .(road_user, outcome, time_period)]
+timing_summary[, `:=`(
+  people_per_calendar_hour = people / (calendar_days * period_hours),
+  people_per_1000_crashes = people / known_outcome_crashes * 1000
+)]
+season_summary <- pooled_summary[, .(
+  people = sum_observed(people), calendar_days = unique(calendar_days)
+), by = .(road_user, outcome, season)]
+season_summary[, people_per_day := people / calendar_days]
+motor_midday <- timing_summary[road_user == "Motorists" & outcome == "Injuries" & time_period == "Midday"]
+motor_rush <- timing_summary[road_user == "Motorists" & outcome == "Injuries" & time_period == "Evening rush"]
+cycle_summer <- season_summary[road_user == "Cyclists" & outcome == "Injuries" & season == "Summer"]
+cycle_winter <- season_summary[road_user == "Cyclists" & outcome == "Injuries" & season == "Winter"]
+ped_winter <- season_summary[road_user == "Pedestrians" & outcome == "Injuries" & season == "Winter"]
+ped_summer <- season_summary[road_user == "Pedestrians" & outcome == "Injuries" & season == "Summer"]
+motor_night_deaths <- timing_summary[road_user == "Motorists" & outcome == "Deaths" & time_period == "Night"]
+motor_rush_deaths <- timing_summary[road_user == "Motorists" & outcome == "Deaths" & time_period == "Evening rush"]
+motor_total_deaths <- sum(timing_summary[road_user == "Motorists" & outcome == "Deaths", people])
+ped_winter_rush_deaths <- pooled_summary[
+  road_user == "Pedestrians" & outcome == "Deaths" & season == "Winter" & time_period == "Evening rush"]
+ped_autumn_deaths <- season_summary[road_user == "Pedestrians" & outcome == "Deaths" & season == "Autumn"]
+ped_winter_deaths <- season_summary[road_user == "Pedestrians" & outcome == "Deaths" & season == "Winter"]
+fwrite(timing_summary, file.path(output_dir, "timing_summary.csv"))
+fwrite(season_summary, file.path(output_dir, "season_summary.csv"))
+```
+
+**The time-window denominator changes the interpretation.** After adjusting for available calendar hours, Evening rush (16:00-19:59) has the highest injury burden of the five windows for all three road-user groups when seasons are combined. Motorists illustrate why raw totals alone can mislead: Midday records `r fmt(motor_midday$people)` injuries versus `r fmt(motor_rush$people)` in Evening rush, but Midday lasts six hours and Evening rush four. The corresponding burdens are **`r sprintf("%.2f", motor_midday$people_per_calendar_hour)` versus `r sprintf("%.2f", motor_rush$people_per_calendar_hour)` injured motorists per calendar hour**, reversing the raw-count ranking. This describes when recorded injuries accumulate, not the risk faced by an individual traveler.
+
+**Seasonal patterns differ across road users.** Cyclist injuries average **`r sprintf("%.2f", cycle_summer$people_per_day)` per covered summer day versus `r sprintf("%.2f", cycle_winter$people_per_day)` per winter day**, a `r sprintf("%.2f", cycle_summer$people_per_day / cycle_winter$people_per_day)`-fold contrast. Summer Evening rush is the largest cyclist injury cell after calendar-hour adjustment. Pedestrian injuries show a different pattern: **`r sprintf("%.2f", ped_winter$people_per_day)` per winter day versus `r sprintf("%.2f", ped_summer$people_per_day)` per summer day**, with Winter Evening rush the largest adjusted pedestrian injury cell. Differences in cycling/walking activity, daylight, and other conditions are possible explanations to investigate; these records alone cannot distinguish them or establish increased risk per trip.
+
+**Death patterns do not simply mirror injury patterns.** Night (00:00-05:59) accounts for **`r fmt(motor_night_deaths$people)` of `r fmt(motor_total_deaths)` recorded motorist deaths (`r sprintf("%.1f", 100 * motor_night_deaths$people / motor_total_deaths)`%)**. It also has the highest motorist death burden per calendar hour when seasons are combined, so the pattern is not solely an artifact of the six-hour window. Per 1,000 reported crashes, recorded motorist deaths are **`r sprintf("%.2f", motor_night_deaths$people_per_1000_crashes)` at Night versus `r sprintf("%.2f", motor_rush_deaths$people_per_1000_crashes)` during Evening rush**. These denominators cover all reported crashes, not only motorist-injury crashes or vehicle trips, and combine reporting regimes.
+
+**Pedestrian fatality patterns depend on the season-time combination.** Winter Evening rush records **`r fmt(ped_winter_rush_deaths$people)` pedestrian deaths** and has the highest pedestrian death burden per calendar hour among the 20 season-time cells. However, across all time windows, **Autumn has more recorded pedestrian deaths than Winter (`r fmt(ped_autumn_deaths$people)` versus `r fmt(ped_winter_deaths$people)`)**. The evidence therefore supports a specific Winter Evening rush concentration, rather than a blanket claim that winter has the most pedestrian deaths overall.
+
+**The broad findings survive removing the partial endpoint years.** In the separate 2013-2025 check, the largest adjusted injury cell remains Winter Evening rush for pedestrians and Summer Evening rush for cyclists and motorists. The largest adjusted death cell also remains Winter Evening rush for pedestrians and Summer Night for motorists. The precise leading cyclist-death time window changes, reinforcing caution about ranking small death counts. This check does not establish that patterns are identical every year or remove confounding and reporting changes.
+
+The most useful presentation message is: **there is no single season-time combination that captures the recorded harm for every road user. Evening-rush injury burden and nighttime motorist fatality burden tell different stories.** These are descriptive differences in police-reported casualties; causal claims and exposure-adjusted safety comparisons require additional data.
+
+## Interpretation limits
+
+- The raw totals describe recorded human harm. The per-crash and calendar-hour charts answer different questions, and neither estimates risk per trip.
+- Season and time window are categorical variables. These figures compare group patterns; they do not calculate a Pearson correlation by assigning arbitrary numbers to seasons, and they do not establish statistical significance.
+- Calendar-hour adjustment removes unequal duration, not differences in cycling, walking, driving, weather, road design, or changes over the years. Apparent seasonal differences should not be attributed to temperature or darkness without additional data.
+- All available records are included, but 2012 begins midyear and 2026 ends midyear. Partial seasons are explicitly reflected in calendar-day denominators. The complete-year check is supplementary.
+- Injury/death recording and police-reporting practices can change. The March 2016 transition to FORMS and the April 2020 reporting-policy change are documented in the sources below. A pooled association should not be treated as a stable causal relationship over the entire period.
+- The snapshot is preliminary. Missing or delayed crash/fatality reporting, especially near the cutoff, cannot be corrected by this aggregation.
+- The same crash can involve multiple road-user groups. Motorists include vehicle occupants, not only drivers. A small or zero death count is not proof of safety.
+- Rush-hour labels identify clock windows on every day, including weekends and holidays; they do not measure actual commuting activity or congestion.
+
+## Sources and reproduction
+
+- City of New York. [Motor Vehicle Collisions - Crashes: official dataset description](https://catalog.data.gov/dataset/motor-vehicle-collisions-crashes). This report uses the local CSV snapshot.
+- NYPD. [Non-injury collision policy announcement, April 3, 2020](https://www.nyc.gov/site/nypd/news/p0403b/nypd-expanding-successful-non-injury-collision-pilot-save-nypd-resources), effective citywide April 6, 2020; Staten Island pilot began in March 2019.
+
+Run `quarto render seasonal_rush_hour_dangerousness.qmd` from this project directory, or open the QMD in RStudio and select **Render**. Required packages: `data.table`, `ggplot2`, and `knitr`. The standalone HTML embeds all five charts. PNG figures and CSV summaries are written to `outputs/seasonal_rush_hour/`; `complete_years_summary.csv` contains the sensitivity subset. The year and season calendar-day table documents all duration denominators.
+
+If using the original challenge submission rules, cite the dataset and include the AI conversation link.
+
+```{r}
+#| label: export-figures
+#| include: false
+ggsave(file.path(output_dir, "injuries_by_season_time.png"), injury_plot,
+  width = 13, height = 5, dpi = 180, bg = "white")
+ggsave(file.path(output_dir, "deaths_by_season_time.png"), death_plot,
+  width = 13, height = 5, dpi = 180, bg = "white")
+ggsave(file.path(output_dir, "casualties_per_1000_crashes.png"), per_crash_plot,
+  width = 13, height = 7, dpi = 180, bg = "white")
+ggsave(file.path(output_dir, "casualties_per_calendar_hour.png"), per_hour_plot,
+  width = 13, height = 7, dpi = 180, bg = "white")
+ggsave(file.path(output_dir, "complete_years_per_calendar_hour.png"), complete_years_plot,
+  width = 13, height = 7, dpi = 180, bg = "white")
+audit <- data.table(
+  metric = c("input_records", "selected_records", "duplicates_removed", "invalid_dates",
+    "invalid_times", "missing_road_user_outcomes", "annual_groups", "pooled_groups",
+    "calendar_days_in_snapshot", "complete_calendar_years"),
+  value = c(input_records, nrow(cohort), duplicates_removed, invalid_dates, invalid_times,
+    sum(missing_summary$missing_outcomes), nrow(annual_summary), nrow(pooled_summary),
+    nrow(calendar), length(complete_years))
+)
+fwrite(audit, file.path(output_dir, "data_audit.csv"))
+capture.output(sessionInfo(), file = file.path(output_dir, "session_info.txt"))
+```

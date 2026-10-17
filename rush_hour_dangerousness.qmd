@@ -1,0 +1,73 @@
+---
+title: "rush_hour_dangerousness"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+library(tidyverse)
+
+collision_data <- read_csv("data/motor_vehicle_collisions.csv")
+nrow(collision_data)   # should now be large, not 2
+
+```
+
+```{r}
+breaks <- c(0, 6, 10, 16, 20, 24)
+labels <- c("Night", "Morning rush", "Midday", "Evening rush", "Evening")
+
+collision_data_group_by_time <- collision_data |>
+  mutate(
+    hour_dec    = as.numeric(`CRASH TIME`) / 3600,   # seconds since midnight -> decimal hours
+    time_period = cut(hour_dec, breaks = breaks, labels = labels,
+                      right = FALSE, include.lowest = TRUE)
+  )
+```
+
+```{r}
+library(tidyverse)
+
+breaks <- c(0, 6, 10, 16, 20, 24)
+labels <- c("Night", "Morning rush", "Midday", "Evening rush", "Evening")
+
+collisions_data_group_by_time <- collision_data |>
+  select(
+    -starts_with("CONTRIBUTING FACTOR"),               # factors 1-5
+    -starts_with("VEHICLE TYPE CODE"),                 # vehicle types 1-5
+    -c(BOROUGH, `ZIP CODE`, LATITUDE, LONGITUDE, LOCATION),
+    -ends_with("STREET NAME"),                         # ON / CROSS / OFF STREET NAME
+    -any_of("hour_dec")                                # helper from earlier, if it exists
+  ) |>
+  mutate(
+    time_period = cut(as.numeric(`CRASH TIME`) / 3600,
+                      breaks = breaks, labels = labels,
+                      right = FALSE, include.lowest = TRUE)
+  ) |>
+  relocate(time_period, `CRASH TIME`) |>               # move both to the front
+  arrange(`CRASH TIME`)                                # earliest to latest in the day
+```
+
+```{r}
+
+```

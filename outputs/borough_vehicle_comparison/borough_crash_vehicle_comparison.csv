@@ -1,0 +1,7 @@
+"borough","total_crashes","annual_average_crashes","active_registrations","annual_crashes_per_1000_vehicles","annual_proportion_percent"
+"MANHATTAN",348485,24891.79,231183,107.67,10.77
+"BROOKLYN",506806,36200.43,526159,68.8,6.88
+"BRONX",234088,16720.57,265112,63.07,6.31
+"QUEENS",422409,30172.07,814524,37.04,3.7
+"STATEN ISLAND",66024,4716,287874,16.38,1.64
+"TOTAL (known boroughs)",1577812,112700.86,2124852,53.04,5.3

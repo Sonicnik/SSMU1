@@ -6,9 +6,11 @@ Matrix products: default
   LAPACK version 3.12.1
 
 locale:
-[1] LC_COLLATE=C                        LC_CTYPE=English_United States.utf8
-[3] LC_MONETARY=C                       LC_NUMERIC=C                       
-[5] LC_TIME=C                          
+[1] LC_COLLATE=Chinese (Simplified)_Hong Kong SAR.utf8 
+[2] LC_CTYPE=English_United States.utf8                
+[3] LC_MONETARY=Chinese (Simplified)_Hong Kong SAR.utf8
+[4] LC_NUMERIC=C                                       
+[5] LC_TIME=Chinese (Simplified)_Hong Kong SAR.utf8    
 
 time zone: Asia/Shanghai
 tzcode source: internal
